@@ -28,10 +28,13 @@ output = np.array([0,640,0,480,0,480])
 
 mtx = np.array([[ 620.54646,0, 316.17234],[0,621.10631,244.57960],[0,0,1]],dtype=np.float64)
 distcoeff = np.array([ 0.13359,-0.29557, -0.00070 ,-0.00054,0.00000 ],dtype=np.float64)
-R = np.array([[  5.08578383e-04,   9.99432156e-01,  -3.36913444e-02],
-       [ -9.32515472e-01,   1.26409351e-02,   3.60908716e-01],
-       [  3.61129666e-01,   3.12341496e-02,   9.31992378e-01]])
-tvec = np.array([[-204.29808184],[187.40871596],[648.37443412]])
+pose = np.load('/home/pi/ip/pose.npz')
+R = pose['R']
+tvec = pose['tvecs']
+#R = np.array([[  5.08578383e-04,   9.99432156e-01,  -3.36913444e-02],
+       #[ -9.32515472e-01,   1.26409351e-02,   3.60908716e-01],
+       #[  3.61129666e-01,   3.12341496e-02,   9.31992378e-01]])
+#tvec = np.array([[-204.29808184],[187.40871596],[648.37443412]])
 
 
 #########################
@@ -92,25 +95,29 @@ try:
 	failtimes = 0
 	l = 1
 	i = 1
+	detected = 0
+	pack_send = 2
 	start = time.clock()
-	while (True) & ( l < 3000):
+	while (True) & ( l <= 1000):
 		#ret,frame = cap.read()
 		frame = vs.read()
 		output = squarelut8(output,480,640,10,frame[output[4]:output[5],:,:])
 		if output[0] <= output[1]:
 			#cv2.rectangle(frame,(output[0],output[2]),(output[1],output[3]),(255,0,0),2)
-			print np.asarray(output)[0:4]
+			#print np.asarray(output)[0:4]
 			u = final_return(np.asarray(output)[0:4], Qinv).ravel()
 			soc.send(''.join(['u',u.tostring(),'l']))
 			failtimes = 0
+			detected += 1
 		else:
 			failtimes += 1
 			if failtimes > 5:
 				soc.send(''.join(['d',failarr.tostring(),'l']))
 				failtimes = 0
-			print "Ball Not detected"
+				pack_send += 1
+			#print "Ball Not detected"
 		l += 1
-		#time.sleep(0.001)
+		#time.sleep(0.004)
 		#cv2.imshow('frame',frame)
 		#if cv2.waitKey(1) & 0xFF == ord('c'):
 		#	stringval = 'img' + str(i) +'.bmp'
@@ -120,16 +127,22 @@ try:
 		#if cv2.waitKey(1) & 0xFF == ord('q'):
 		#	break
 	end = time.clock()
-	print 'time taken =',end - start,'seconds'
-	print 'frame rate =',l/(end-start)
-	soc.send(''.join(['e',failarr.tostring(),'l']))
-
+	print '*' * 80
+	print 'BEACON 1'
+	print 'Video Capture frame rate: 30 frames/second'
+	print 'Number of frames processed: 1000 frames'
+	print 'Frames in which object is detected: ',detected,' frames'
+	print 'Packets sent: ',detected + pack_send
+	#print 'time taken =',end - start,' seconds'
+	print 'Frequency of packet transmission: %.3f Hz'%((detected+pack_send)/(end-start))
+	print '*' * 80
 except:
 	typ,val,tb = sys.exc_info()
 	traceback.print_exception(typ,val,tb)
 
 	
-finally:	
+finally:
+	soc.send(''.join(['e',failarr.tostring(),'l']))	
 	soc.close()
 	cleanupf()
 	#cap.release()
